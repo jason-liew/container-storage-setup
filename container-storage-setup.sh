@@ -362,6 +362,35 @@ check_min_data_size_condition() {
   fi
 }
 
+check_max_data_size_condition() {
+  local max_data_size_bytes data_size_bytes free_space
+
+  [ -z $MAX_DATA_SIZE ] && return 0
+
+  if ! check_numeric_size_syntax $MAX_DATA_SIZE; then
+    Fatal "MAX_DATA_SIZE value $MAX_DATA_SIZE is invalid."
+  fi
+
+  if ! max_data_size_bytes=$(convert_size_in_bytes $MAX_DATA_SIZE);then
+    Fatal "Failed to convert MAX_DATA_SIZE to bytes"
+  fi
+
+  # If integer overflow took place, value is too large to handle.
+  if [ $max_data_size_bytes -lt 0 ];then
+    Fatal "MAX_DATA_SIZE=$MAX_DATA_SIZE is too large to handle."
+  fi
+
+  if ! data_size_bytes=$(data_size_in_bytes $DATA_SIZE);then
+    Fatal "Failed to convert desired data size to bytes"
+  fi
+
+  if [ $data_size_bytes -gt $max_data_size_bytes ]; then
+    # Decreasing DATA_SIZE to meet maximum  data size requirements.
+    Info "DATA_SIZE=${DATA_SIZE} is bigger than MAX_DATA_SIZE=${MAX_DATA_SIZE}. Will create data volume of size specified by MAX_DATA_SIZE."
+    DATA_SIZE=$MAX_DATA_SIZE
+  fi
+}
+
 create_lvm_thin_pool () {
   if [ -z "$_DEVS_RESOLVED" ] && [ -z "$_VG_EXISTS" ]; then
     Fatal "Specified volume group $VG does not exist, and no devices were specified"
@@ -376,6 +405,7 @@ create_lvm_thin_pool () {
   fi
 
   check_min_data_size_condition
+  check_max_data_size_condition
 
   # Calculate size of metadata lv. Reserve 0.1% of the free space in the VG
   # for docker metadata.
